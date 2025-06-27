@@ -1,0 +1,210 @@
+# PIPELINE DEFINITION
+# Name: tuantb-pipeline
+# Description: this is description
+components:
+  comp-process-data:
+    executorLabel: exec-process-data
+    outputDefinitions:
+      parameters:
+        labels:
+          parameterType: LIST
+        texts:
+          parameterType: LIST
+  comp-train-model:
+    executorLabel: exec-train-model
+    inputDefinitions:
+      parameters:
+        labels:
+          parameterType: LIST
+        texts:
+          parameterType: LIST
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: NUMBER_DOUBLE
+  comp-verify-accuracy:
+    executorLabel: exec-verify-accuracy
+    inputDefinitions:
+      parameters:
+        accuracy:
+          parameterType: NUMBER_DOUBLE
+        threshold:
+          parameterType: NUMBER_DOUBLE
+deploymentSpec:
+  executors:
+    exec-process-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - process_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.9.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef process_data() -> NamedTuple(\"outputs\", texts=List[str], labels=List[int]):\n\
+          \    # Sample dataset\n    dataset = [\n        (\"I love this!\", \"positive\"\
+          ),\n        (\"I hate this!\", \"negative\"),\n        (\"This is awesome!\
+          \ \", \"positive\"),\n        (\"This is terrible!\", \"negative\"),\n \
+          \       (\"I really enjoyed the experience.\", \"positive\"),\n        (\"\
+          I did not like the experience at all.  \", \"negative\"),\n        (\" \
+          \ I love it.\", \"positive\"),\n        (\"I hate it.\", \"negative\"),\n\
+          \        (\"I like it.\", \"positive\"),\n        (\"I don't like it.\"\
+          , \"negative\"),\n        (\"I like this.\", \"positive\"),\n        (\"\
+          \   That is not good.\", \"negative\"),\n        (\"That is so cool, love\
+          \ it.\", \"positive\"),\n        (\"I had a bad experience.\", \"negative\"\
+          ),\n        (\"That is awesome\", \"positive\"),\n        (\"   I am worried\
+          \ about it.   \", \"negative\"),\n        (\"This is wonderful\", \"positive\"\
+          ),\n        (\"This is terrible, don't even try\", \"negative\"),\n    \
+          \    (\"This is amazing!\", \"positive\"),\n        (\"That is not my cup\
+          \ of tea.\", \"negative\"),\n        (\"I like it so much   .\", \"positive\"\
+          ),\n    ]\n\n    # Separate texts and labels into different lists\n    texts\
+          \ = [sample[0].strip() for sample in dataset]\n    labels = [sample[1] for\
+          \ sample in dataset]\n\n    # Convert labels into numbers\n    class_ids\
+          \ = {\"positive\": 1, \"negative\": 0}\n    labels = [class_ids[label] for\
+          \ label in labels]\n\n    # Return texts and labels\n    outputs = NamedTuple(\"\
+          outputs\", texts=List[str], labels=List[int])\n    return outputs(texts,\
+          \ labels)\n\n"
+        image: quay.io/modh/runtime-images:runtime-datascience-ubi9-python-3.9-2024a-20241011
+    exec-train-model:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_model
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.9.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_model(texts: list, labels: list) -> float:\n    from sklearn.feature_extraction.text\
+          \ import TfidfVectorizer\n    from sklearn.naive_bayes import MultinomialNB\n\
+          \    from sklearn.pipeline import make_pipeline\n    from sklearn.model_selection\
+          \ import train_test_split\n    from sklearn.metrics import accuracy_score\n\
+          \n    # Split dataset into training and test sets (even though it's tiny)\n\
+          \    X_train, X_test, y_train, y_test = train_test_split(\n        texts,\
+          \ labels, test_size=0.2, random_state=83\n    )\n\n    # Create a pipeline\
+          \ with a TF-IDF Vectorizer and a Logistic Regression classifier\n    pipeline\
+          \ = make_pipeline(\n        TfidfVectorizer(), MultinomialNB()  # Converts\
+          \ text into TF-IDF features\n    )\n\n    # Train the model\n    pipeline.fit(X_train,\
+          \ y_train)\n\n    # Make predictions\n    predictions = pipeline.predict(X_test)\n\
+          \n    # Evaluate the model\n    accuracy = accuracy_score(y_test, predictions)\n\
+          \n    print(\"Test texts:\", X_test)\n    print(\"Test predictions:\", predictions)\n\
+          \    print(\"Expected prediction:\", y_test)\n\n    return accuracy\n\n"
+        image: quay.io/modh/runtime-images:runtime-datascience-ubi9-python-3.9-2024a-20241011
+    exec-verify-accuracy:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - verify_accuracy
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.9.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef verify_accuracy(accuracy: float, threshold: float):\n    import\
+          \ sys\n\n    if accuracy >= threshold:\n        print(\"Model trained successfully\"\
+          )\n        print(f\"Accuracy: {accuracy * 100:.2f}%\")\n    else:\n    \
+          \    print(f\"The model did not achieve the minimum accuracy of {threshold\
+          \ * 100:.2f}%.\")\n        print(f\"Accuracy: {accuracy * 100:.2f}%\")\n\
+          \        sys.exit(1)\n\n"
+        image: quay.io/modh/runtime-images:runtime-datascience-ubi9-python-3.9-2024a-20241011
+pipelineInfo:
+  description: this is description
+  name: tuantb-pipeline
+root:
+  dag:
+    tasks:
+      process-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-process-data
+        taskInfo:
+          name: process-data
+      train-model:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-model
+        dependentTasks:
+        - process-data
+        inputs:
+          parameters:
+            labels:
+              taskOutputParameter:
+                outputParameterKey: labels
+                producerTask: process-data
+            texts:
+              taskOutputParameter:
+                outputParameterKey: texts
+                producerTask: process-data
+        taskInfo:
+          name: train-model
+      verify-accuracy:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-verify-accuracy
+        dependentTasks:
+        - train-model
+        inputs:
+          parameters:
+            accuracy:
+              taskOutputParameter:
+                outputParameterKey: Output
+                producerTask: train-model
+            threshold:
+              runtimeValue:
+                constant: 0.99
+        taskInfo:
+          name: verify-accuracy
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.9.0
