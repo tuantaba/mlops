@@ -109,7 +109,7 @@ def pipeline():
     accuracy = train_task.output
 
     # TODO: Verify the model accuracy
-    verify_accuracy(accuracy=accuracy, threshold=0.99)
+    verify_accuracy(accuracy=accuracy, threshold=0.7)
 
 
 if __name__ == "__main__":

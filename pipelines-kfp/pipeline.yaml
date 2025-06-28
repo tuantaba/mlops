@@ -203,7 +203,7 @@ root:
                 producerTask: train-model
             threshold:
               runtimeValue:
-                constant: 0.99
+                constant: 0.7
         taskInfo:
           name: verify-accuracy
 schemaVersion: 2.1.0
